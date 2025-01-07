@@ -1,0 +1,19 @@
+timedatectl && python3 /media/inverseai/432e68df-5f7f-44a3-ac5b-f984da69470d/inverseai/train/noise_reducer_16k_last/noise-reducer-ml/denoiser-inverse/train.py  --autotune 32 --tfrecords_dir /media/inverseai/432e68df-5f7f-44a3-ac5b-f984da69470d/inverseai/tfrecords --checkpoints_dir /media/inverseai/432e68df-5f7f-44a3-ac5b-f984da69470d/inverseai/train/noise_reducer_16k_last/checkpoints --epochs 300 --steps_per_epoch 18000 --batch_size 16 --sample_rate 16000 --total_seconds_of_audio 10 | tee -a /media/inverseai/432e68df-5f7f-44a3-ac5b-f984da69470d/inverseai/train/noise_reducer_16k_last/noise-reducer-ml/denoiser-inverse/train_log.txt
+
+
+
+
+
+
+
+Steps per epoch = Number of total files/(batch size*Number of GPU)
+
+
+
+
+Issue solving nvidia-cuda
+sudo apt update && rm -rf /var/lib/apt/lists/*
+sudo add-apt-repository multiverse
+sudo apt update  
+sudo apt install nvidia-cuda-toolkit   
+sudo reboot 
