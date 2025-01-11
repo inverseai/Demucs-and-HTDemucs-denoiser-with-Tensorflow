@@ -1,0 +1,108 @@
+# config.yaml
+
+# General settings
+
+model_name : htdemucs
+sample_rate: 48000
+total_seconds_of_audio: 10
+channel: 1
+batch_size: &batch_size_value 1
+autotune: *batch_size_value 
+learning_rate: 0.0003
+beta_1: 0.9
+beta_2: 0.999
+epsilon: 0.0000001
+dataset_format: "raw"         #Use "raw" when training with raw datas, otherwise use "tfrecords" if tfrcords is used
+
+#In case of using tfrecords, provides tfrecord directory 
+tfrecords_dir: /home/inverseai/Data/tfrecords/tfrecords_mini_dataset/
+
+#In case of using raw dataset format
+train_dir: /home/ml-dev/Data/mini_dataset/10_data_wav
+val_dir: 
+
+steps_per_epoch: 20
+val_steps_per_epoch: -1
+val_freq: 0       # val_freq: 0 means no means no validation will happan. val_freq: 1 means no means no validation will happan
+epochs: 1000
+saved_model_base_name: saved_weight_
+checkpoints_dir: /home/ml-dev/Data/mini_dataset/10_data_wav/out
+
+# Model-specific settings
+models:
+  demucs: 
+
+  htdemucs:  # see demucs/htdemucs.py for a detailed description
+    # Channels
+    channels: 24
+    channels_time: 
+    growth: 2
+    # STFT
+    nfft: 12288                #Sample rate=16k -> nfft = 4096 :: Sample rate=32k -> nfft = 8192 ::  Sample rate=48k -> nfft = 12288 
+    wiener_iters: 0
+    end_iters: 0
+    wiener_residual: False
+    cac: True
+    # Main structure
+    depth: 5
+    rewrite: True
+    # Frequency Branch
+    multi_freqs: []
+    multi_freqs_depth: 3
+    freq_emb: 0.2
+    emb_scale: 10
+    emb_smooth: True
+    # Convolutions
+    kernel_size: 8
+    stride: 4
+    time_stride: 2
+    context: 1
+    context_enc: 0
+    # normalization
+    norm_starts: 4
+    norm_groups: 4
+    # DConv residual branch
+    dconv_mode: 1
+    dconv_depth: 2
+    dconv_comp: 8
+    dconv_init: 0.001
+    # CrossTransformer
+    # ------ Common to all
+    # Regular parameters
+    t_layers: 5
+    t_hidden_scale: 4.0
+    t_heads: 8
+    t_dropout: 0.0
+    t_layer_scale: True
+    t_gelu: gelu
+    # ------------- Positional Embedding
+    t_emb: sin
+    t_max_positions: 10000  # for the scaled embedding
+    t_max_period: 10000.0
+    t_weight_pos_embed: 1.0
+    t_cape_mean_normalize: True
+    t_cape_augment: True
+    t_cape_glob_loc_scale: [5000.0, 1.0, 1.4]
+    t_sin_random_shift: 0
+    # ------------- norm before a transformer encoder
+    t_norm_in: True
+    t_norm_in_group: False
+    # ------------- norm inside the encoder
+    t_group_norm: False
+    t_norm_first: True
+    t_norm_out: True
+    # ------------- optim
+    t_weight_decay: 0.0
+    t_lr: 
+    # ------------- sparsity
+    t_sparse_self_attn: False
+    t_sparse_cross_attn: False
+    t_mask_type: diag
+    t_mask_random_seed: 42
+    t_sparse_attn_window: 400
+    t_global_window: 100
+    t_sparsity: 0.95
+    t_auto_sparsity: False
+    # Cross Encoder First
+    t_cross_first: False 
+ 

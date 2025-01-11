@@ -61,7 +61,7 @@ This guide outlines the steps to configure a GPU for training deep learning mode
 ## Data preparation
 
 - Download dataset from GitHub - microsoft/DNS-Challenge at interspeech2020/master repository or download links provided in the directory Dataset_preparation/Dataset_preparation_required_files/
--  Extract data from tar files and convert the sample rate to 16k.(scripts contain in Dataset_preparation/Dataset_preparation_required_files/)
+-  Extract data from tar files (scripts contain in Dataset_preparation/Dataset_preparation_required_files/)
 
 #### Generate noisy and clean audio files 
   -  cd to Dataset_preparation/DNS-Challenge_2020_setup.
@@ -69,8 +69,8 @@ This guide outlines the steps to configure a GPU for training deep learning mode
   -  Setup parameters noisyspeech_synthesizer.cfg.
   -  Generate noisy and clean audio files by running script noisyspeech_synthesizer_singleprocess.py.
  
-#### Generate Tfrecords from noisy and clean audios
-- Change directory to Train/denoiser
+#### Use raw data or generate Tfrecords from noisy and clean audios
+- Change directory to denoiser_inverse/denoiser
 - Write file path to a json file with running convert.py
 
 ```
@@ -81,6 +81,9 @@ python3 convert.py --noisy_dir <noisy files path> --clean_dir <clean_files_path>
 python3 convert_tf_record.py -n <noisy json file location> -c <clean json file location> -o  <tfrecord path> --num-shards-train <number of train tfrecords> --num-shards-test <number of test tfrecords> --num-shards-val <number of valid tfrecords> --sample-rate 16000 --test-size <test size in percentage(values between 0 to 1)> --val-size <validation size in percentage(values between 0 to 1)>
 ```
 
+#### Create json file of train and validation noisy and clean files
+- Create json file using write_to_json.py for writing audio paths in json files(updates data path in write_to_json)
+
 
 #### Troubleshooting
 In case of getting tfrecord corruption issue(DATA_LOSS:  corrupted record), We can figure out the tfrecords which contains issues .
@@ -88,10 +91,11 @@ In case of getting tfrecord corruption issue(DATA_LOSS:  corrupted record), We c
 
 ## Training
 
-- Change directory to Train/denoiser_inverse
-- Run train.py for training. 
+- Change directory to denoiser_inverse
+- update data path and configurations for training in config.yaml
+- Run train_main.py for training. 
 ```
-python3 train.py  --autotune <batch_size*number_of_gpu > --tfrecords_dir <directory of tfrecords> --checkpoints_dir <directory_of_checkpoints> --epochs <number of epochs> --steps_per_epoch <total noisy file/(batch_size *number_of_gpu)> --batch_size <batch_size> --learning_rate 3e-4 --sample_rate 16000 --total_seconds_of_audio 10 >>  <log_file_path> 
+python3 train_main.py  
 ```
 
 ***
@@ -115,7 +119,7 @@ python3 evl.py --model_path <model_path> --tfrecord_path  <tfrecord path for tes
 - Change directory to Train/denoiser_inverse/denoiser
 - Run enhance_with_model.py for inference: 
 ```
-python3 enhance_with_model.py --model_path  <model_path> --noisy_path <noisy_path> --enhanced_path <enhanced_path>
+python3 inference_main.py --checkpoint_path  <model_path> --input_dir <noisy_path> --output_dir <enhanced_path>
 ```
 
 

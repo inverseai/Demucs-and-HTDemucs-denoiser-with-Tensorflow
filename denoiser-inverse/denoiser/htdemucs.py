@@ -1,25 +1,41 @@
 import tensorflow as tf
-from stft_utils import STFTUtils
-from hybrid_encoder_decoder import Encoder, Decoder
-from transformerLayers.transformers import CrossDomainTransformerEncoder
+from .stft_utils import STFTUtils
+from .hybrid_encoder_decoder import Encoder, Decoder
+from .transformerLayers.transformers import CrossDomainTransformerEncoder
 
 
 # will require to update this for training
 class ScaledEmbedding(tf.keras.layers.Layer):
-    def __init__(self, num_embeddings, embedding_dim, scale=10.0, smooth=False):
-        super().__init__()
-        self.embedding = tf.keras.layers.Embedding(
-            input_dim=num_embeddings,
-            output_dim=embedding_dim,
-            embeddings_initializer="uniform",
-        )
+    """
+    Boost learning rate for embeddings (with scale).
+    Also, can make embeddings continuous with smooth.
+    """
+    def __init__(self, num_embeddings: int, embedding_dim: int, scale: float = 10., smooth=False):
+        super(ScaledEmbedding, self).__init__()
+        self.embedding = tf.keras.layers.Embedding(num_embeddings, embedding_dim)
         self.scale = scale
+        self.smooth = smooth
+        self.built = False
+
+    def build(self, input_shape):
+        super(ScaledEmbedding, self).build(input_shape)
+        if not self.built:
+            if self.smooth:
+                weight = tf.cumsum(self.embedding.embeddings, axis=0)
+                weight = weight / tf.math.sqrt(tf.range(1, tf.shape(weight)[0] + 1, dtype=tf.float32))[:, None]
+                self.embedding.embeddings.assign(weight)
+            self.embedding.embeddings.assign(self.embedding.embeddings / self.scale)
+            self.built = True
+
+    @property
+    def weight(self):
+        return self.embedding.embeddings * self.scale
 
     def call(self, inputs):
-        # input shape : (length,)
-        # return shape : (length, embedding_dim)
-        return self.embedding(inputs) * self.scale
-
+        if not self.built:
+            self.build(None)
+        out = self.embedding(inputs) * self.scale
+        return out
 
 
 @tf.keras.utils.register_keras_serializable()
@@ -123,7 +139,7 @@ class HTDemucs(tf.keras.Model):
         rescale=0.1,
         # Metadata
         sample_rate=16000,
-        segment=10,
+        length=10,
         use_train_segment=True,
         **kwargs,
     ):
@@ -276,7 +292,7 @@ class HTDemucs(tf.keras.Model):
             "t_cross_first": t_cross_first,
             "rescale": rescale,
             "sample_rate": sample_rate,
-            "segment": segment,
+            "length": length,
             "use_train_segment": use_train_segment,
         }
         self._init_kwargs.update(kwargs)
@@ -290,7 +306,7 @@ class HTDemucs(tf.keras.Model):
         self.depth = depth
         self.channels = channels
         self.sample_rate = sample_rate
-        self.segment = segment
+        self.length = length
         self.use_train_segment = use_train_segment
         self.nfft = nfft
         self.hop_length = nfft // 4
@@ -316,12 +332,15 @@ class HTDemucs(tf.keras.Model):
         for index in range(depth):
             norm = index >= norm_starts
             freq = freqs > 1
-            stri = stride
             ker = kernel_size
+            stri = stride
             if not freq:
                 assert freqs == 1
                 ker = time_stride * 2
                 stri = time_stride
+            if index == 0:
+                # for fs 32k stri = 2, fs 48k stri = 3
+                stri = self.sample_rate // 16000
 
             pad = True
             last_freq = False
@@ -348,7 +367,7 @@ class HTDemucs(tf.keras.Model):
             kwt = dict(kw)
             kwt["freq"] = 0
             kwt["kernel_size"] = kernel_size
-            kwt["stride"] = stride
+            kwt["stride"] = stri
             kwt["pad"] = True
             enc = Encoder(chout_z, dconv=dconv_mode & 1, **kw)
             if freq:
@@ -390,7 +409,7 @@ class HTDemucs(tf.keras.Model):
                 if freqs <= kernel_size:
                     freqs = 1
                 else:
-                    freqs //= stride
+                    freqs //= stri
             if index == 0 and freq_emb:
                 self.freq_emb = ScaledEmbedding(
                     freqs, chin_z, scale=emb_scale, smooth=emb_smooth
@@ -427,15 +446,11 @@ class HTDemucs(tf.keras.Model):
             complex_tensor = tf.complex(real, imag)
             return complex_tensor
 
-
     def call(self, mix, training=None):  # Batch, timestamps, channel
-        batch, timestamps, channel = mix.shape
         signal_length = mix.shape[1]
         xt = mix
-        mix = tf.transpose(
-            mix, [0, 2, 1]
-        )  
-        z = STFTUtils.spectro(mix)    # batch, channel, frames, frequency
+        mix = tf.transpose(mix, [0, 2, 1])
+        z = STFTUtils.spectro(mix, self.nfft)  # batch, channel, frames, frequency
         mag = STFTUtils.magnitude(z)  # batch, channel, frames, frequency
         x_freq = mag  # x_freq is frequency domain tensor
 
@@ -443,7 +458,7 @@ class HTDemucs(tf.keras.Model):
         mean_freq = tf.math.reduce_mean(x_freq, axis=(1, 2, 3), keepdims=True)
         std_freq = tf.math.reduce_std(x_freq, axis=(1, 2, 3), keepdims=True)
         x_freq = (x_freq - mean_freq) / (1e-5 + std_freq)
-       
+
         meant = tf.math.reduce_mean(xt, axis=(1, 2), keepdims=True)
         stdt = tf.math.reduce_std(xt, axis=(1, 2), keepdims=True)
         xt = (xt - meant) / (1e-5 + stdt)
@@ -455,7 +470,7 @@ class HTDemucs(tf.keras.Model):
         lengths_freq = []  # saved lengths to properly remove padding, freq branch.
         lengths_t = []  # saved lengths for time branch.
 
-        # Encoder layer  
+        # Encoder layer
         for idx, freq_encode in enumerate(self.freq_encoder):
             lengths_freq.append(x_freq.shape[-2])  # Frame length
             if idx < len(self.tencoder):
@@ -477,7 +492,7 @@ class HTDemucs(tf.keras.Model):
 
         x_freq = tf.transpose(x_freq, [0, 3, 1, 2])  # batch, channel, frequncy, frame
         xt = tf.transpose(xt, [0, 2, 1])  # batch, channel, timasteps
-        
+
         # Apply cross-domain transformer if needed
         if self.cross_domain_transformer:
             x_freq, xt = self.cross_domain_transformer(x_freq, xt)
@@ -492,23 +507,23 @@ class HTDemucs(tf.keras.Model):
             x_freq = freq_decode(x_freq, skip_freq)
             xt = self.tdecoder[idx](xt, skip_time)
 
-        #Denormalize frequency domain output
+        # Denormalize frequency domain output
         x_freq = x_freq * std_freq + mean_freq
         x_freq = self._mask(x_freq)  # batch, frequency, frames
         x_freq = tf.transpose(x_freq, [0, 2, 1])  # batch, frames, frequency
 
         x_freq_shape = tf.shape(x_freq)
         x_freq = tf.reshape(
-            x_freq, [x_freq_shape[0], 1 , x_freq.shape[1], x_freq.shape[2]]
+            x_freq, [x_freq_shape[0], 1, x_freq.shape[1], x_freq.shape[2]]
         )  # batch, channel, frame, frequency
         x_freq = STFTUtils.inverse_spectro(
             x_freq, signal_length=signal_length
         )  # batch, frequency, frames
         x_freq = tf.transpose(x_freq, [0, 2, 1])  # batch, signal, channel
-        
-        #Denormalize time domain output
+
+        # Denormalize time domain output
         xt = xt * stdt + meant
-       
+
         final_output = x_freq + xt
 
         return final_output
@@ -522,6 +537,4 @@ class HTDemucs(tf.keras.Model):
         return self._init_kwargs
 
     def _get_save_spec(self, **kwargs):
-        return tf.TensorSpec([None, 160000, 1], tf.float32)
-
-
+        return tf.TensorSpec([None, self.sample_rate * self.length, 1], tf.float32)
