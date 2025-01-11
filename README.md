@@ -3,7 +3,7 @@
 
 ## Description
 
-We are implemented state-of-the-art Demucs and HTDemucs architecture for noise reduction in tensorflow.
+We have implemented state-of-the-art Demucs and HTDemucs architecture for noise reduction in tensorflow.
 We converted Pytorch implementation from [facebook’s Demucs Speech Enhancement](https://github.com/facebookresearch/denoiser) and [Hybrid Transformers for Music Source Separation](https://arxiv.org/abs/2211.08553)(The model, originally designed for music source separation, was updated by our team to perform noise reduction) for our convenient deployment purposes.
 
 In the original work, they provide the description as,  
