@@ -122,6 +122,15 @@ python3 evl.py --model_path <model_path> --tfrecord_path  <tfrecord path for tes
 python3 inference_main.py --checkpoint_path  <model_path> --input_dir <noisy_path> --output_dir <enhanced_path>
 ```
 
+***
+# Deployed Applications
+You can explore our applications for evaluating performance:
+- [Web](https://noise-reducer.com/)
+- [Android app on device inference](https://play.google.com/store/apps/details?id=com.inverseai.audio_video_noise_reducer&hl=en)
+- [Android app server inference](https://play.google.com/store/apps/details?id=com.inverseai.noise_reducer_v3&hl=en)
+- [IOS app on device inference](https://apps.apple.com/az/app/audio-video-noise-reducer-ai/id6505139061)
+- [IOS app server inference](https://apps.apple.com/az/app/boost-audio-voice-reduce-noise/id6505138773)
+
 
 ***
 # Benchmark of our trained and deployed Model 
